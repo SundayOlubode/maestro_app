@@ -1,7 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+
+final baseUrl = Platform.isAndroid
+    ? 'https://maestro-11lz.onrender.com'
+    : 'https://maestro-11lz.onrender.com';
 
 void main() {
   runApp(const VocabApp());
@@ -51,8 +57,12 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     try {
+      final baseUrl = Platform.isAndroid
+          ? 'https://maestro-11lz.onrender.com/api/auth/login'
+          : 'https://maestro-11lz.onrender.com/api/auth/login';
+
       final response = await http.post(
-        Uri.parse('http://localhost:3030/api/auth/login'),
+        Uri.parse(baseUrl),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': _emailController.text,
@@ -60,23 +70,37 @@ class _AuthScreenState extends State<AuthScreen> {
         }),
       );
 
-      if (response.statusCode == 201) {
-        final data = json.decode(response.body);
-        final token = data['access_token'];
+      print('Status code: ${response.statusCode}');
+      print('Response body: ${response.body}');
 
-        // Save token to shared preferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', token);
+      // Parse the response body
+      final Map<String, dynamic> responseData = json.decode(response.body);
 
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        // Extract token from the nested structure
+        if (responseData['status'] == 'success' &&
+            responseData['data'] != null &&
+            responseData['data']['access_token'] != null) {
+          final String token = responseData['data']['access_token'];
+
+          // Save token to shared preferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('token', token);
+
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          }
+        } else {
+          setState(() {
+            _errorMessage = 'Invalid response format: token not found';
+          });
         }
       } else {
-        final data = json.decode(response.body);
+        // Handle error response
         setState(() {
-          _errorMessage = data['message'] ?? 'Login failed';
+          _errorMessage = responseData['message'] ?? 'Login failed';
         });
       }
     } catch (e) {
@@ -249,7 +273,7 @@ class _WordTabState extends State<WordTab> {
       }
 
       final response = await http.post(
-        Uri.parse('http://localhost:3030/api/word'),
+        Uri.parse('$baseUrl/api/word'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -399,7 +423,7 @@ class _IdiomTabState extends State<IdiomTab> {
       }
 
       final response = await http.post(
-        Uri.parse('http://localhost:3030/api/word/idiom'),
+        Uri.parse('$baseUrl/api/word/idiom'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
